@@ -39,7 +39,29 @@
           <input type="checkbox" id="opt-compact" />
           작은 플레이어
         </label>
+        <label class="option" id="opt-wake-lock-wrap" hidden>
+          <input type="checkbox" id="opt-wake-lock" />
+          화면 꺼짐 방지
+        </label>
       </div>
+
+      <div class="mobile-actions" id="mobile-actions" hidden>
+        <button type="button" class="action-btn" id="btn-open-youtube" disabled>
+          YouTube 앱에서 열기
+        </button>
+      </div>
+
+      <aside class="mobile-tip" id="mobile-tip" hidden>
+        <strong>모바일 백그라운드 재생 안내</strong>
+        <p>
+          웹 브라우저의 유튜브 임베드는 iOS/Android 정책상 다른 앱으로 이동하거나 화면을 끄면
+          재생이 멈춥니다. 웹앱만으로는 우회가 불가능합니다.
+        </p>
+        <ul>
+          <li><b>화면 꺼짐 방지</b> — 화면을 켠 채로 BGM 재생 (배터리 소모)</li>
+          <li><b>YouTube 앱에서 열기</b> — 유튜브 프리미엄이면 백그라운드 재생 가능</li>
+        </ul>
+      </aside>
 
       <div class="volume-row">
         <span>🔊</span>

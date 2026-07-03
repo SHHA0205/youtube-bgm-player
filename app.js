@@ -6,6 +6,8 @@
   let lastTrackId = null;
   let autoNext = true;
   let apiReady = false;
+  let wakeLock = null;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const els = {
     title: document.getElementById("track-title"),
@@ -15,6 +17,11 @@
     next: document.getElementById("btn-next"),
     autoNext: document.getElementById("opt-auto-next"),
     compact: document.getElementById("opt-compact"),
+    wakeLockWrap: document.getElementById("opt-wake-lock-wrap"),
+    wakeLock: document.getElementById("opt-wake-lock"),
+    mobileActions: document.getElementById("mobile-actions"),
+    mobileTip: document.getElementById("mobile-tip"),
+    openYoutube: document.getElementById("btn-open-youtube"),
     volume: document.getElementById("volume"),
     playerWrap: document.getElementById("player-wrap"),
     placeholder: document.getElementById("player-placeholder"),
@@ -51,6 +58,12 @@
     return track;
   }
 
+  function categoryLabelFor(track, categoryKey) {
+    return categoryKey === "all"
+      ? track.categoryLabel
+      : categories[categoryKey]?.label || track.categoryLabel;
+  }
+
   function setNowPlaying(track, categoryKey) {
     currentTrack = track;
     lastTrackId = track?.id ?? null;
@@ -58,16 +71,101 @@
     if (!track) {
       els.title.textContent = "카테고리를 선택하고 재생하세요";
       els.meta.textContent = "";
+      els.openYoutube.disabled = true;
+      clearMediaSession();
       return;
     }
 
-    const catLabel =
-      categoryKey === "all"
-        ? track.categoryLabel
-        : categories[categoryKey]?.label || track.categoryLabel;
-
+    const catLabel = categoryLabelFor(track, categoryKey);
     els.title.textContent = track.title;
     els.meta.textContent = `${catLabel} · YouTube`;
+    els.openYoutube.disabled = false;
+    updateMediaSession(track, catLabel);
+  }
+
+  function updateMediaSession(track, catLabel) {
+    if (!("mediaSession" in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: catLabel,
+      album: "BGM Player",
+    });
+
+    navigator.mediaSession.setActionHandler("play", () => player?.playVideo());
+    navigator.mediaSession.setActionHandler("pause", () => player?.pauseVideo());
+    navigator.mediaSession.setActionHandler("nexttrack", () => playRandom());
+    navigator.mediaSession.setActionHandler("previoustrack", () => playRandom());
+  }
+
+  function clearMediaSession() {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = null;
+  }
+
+  async function acquireWakeLock() {
+    if (!els.wakeLock.checked || !("wakeLock" in navigator)) return;
+
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        wakeLock = null;
+      });
+    } catch {
+      els.wakeLock.checked = false;
+    }
+  }
+
+  async function releaseWakeLock() {
+    if (!wakeLock) return;
+    try {
+      await wakeLock.release();
+    } catch {
+      // ignore
+    }
+    wakeLock = null;
+  }
+
+  async function syncWakeLockWithPlayback() {
+    const playing = player?.getPlayerState?.() === YT.PlayerState.PLAYING;
+    if (playing && els.wakeLock.checked) {
+      await acquireWakeLock();
+    } else {
+      await releaseWakeLock();
+    }
+  }
+
+  function youtubeWatchUrl(videoId) {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }
+
+  function openInYoutubeApp(videoId) {
+    const webUrl = youtubeWatchUrl(videoId);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+      const intentUrl =
+        `intent://www.youtube.com/watch?v=${videoId}` +
+        "#Intent;package=com.google.android.youtube;scheme=https;end";
+      window.location.href = intentUrl;
+      setTimeout(() => {
+        window.open(webUrl, "_blank", "noopener,noreferrer");
+      }, 700);
+      return;
+    }
+
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function setupMobileUI() {
+    if (!isMobile) return;
+
+    els.mobileTip.hidden = false;
+    els.mobileActions.hidden = false;
+
+    if ("wakeLock" in navigator) {
+      els.wakeLockWrap.hidden = false;
+    }
   }
 
   function renderCategories() {
@@ -135,6 +233,7 @@
             playRandom();
           }
           updatePlayPauseIcon();
+          syncWakeLockWithPlayback();
         },
       },
     });
@@ -177,6 +276,7 @@
       }
     }
     updatePlayPauseIcon();
+    syncWakeLockWithPlayback();
   }
 
   function updatePlayPauseIcon() {
@@ -199,10 +299,26 @@
     els.playerWrap.classList.toggle("compact", e.target.checked);
   });
 
+  els.wakeLock.addEventListener("change", () => {
+    syncWakeLockWithPlayback();
+  });
+
+  els.openYoutube.addEventListener("click", () => {
+    if (!currentTrack?.id) return;
+    openInYoutubeApp(currentTrack.id);
+  });
+
   els.volume.addEventListener("input", (e) => {
     if (player?.setVolume) player.setVolume(Number(e.target.value));
   });
 
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      syncWakeLockWithPlayback();
+    }
+  });
+
+  setupMobileUI();
   renderCategories();
   loadYouTubeAPI();
 })();
